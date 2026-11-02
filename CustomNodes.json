@@ -1,0 +1,109 @@
+{
+  "custom_types": {
+    "K8sNamespace": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "layer-group",
+        "color": "#326CE5"
+      }
+    },
+    "K8sPod": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "cube",
+        "color": "#326CE5"
+      }
+    },
+    "K8sServiceAccount": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "user-gear",
+        "color": "#FF9900"
+      }
+    },
+    "K8sRole": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "user-shield",
+        "color": "#9C27B0"
+      }
+    },
+    "K8sClusterRole": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "shield-halved",
+        "color": "#D32F2F"
+      }
+    },
+    "K8sSecret": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "key",
+        "color": "#FFC107"
+      }
+    },
+    "K8sConfigMap": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "file-code",
+        "color": "#4CAF50"
+      }
+    },
+    "K8sNode": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "server",
+        "color": "#607D8B"
+      }
+    },
+    "K8sUser": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "user",
+        "color": "#FF5722"
+      }
+    },
+    "K8sGroup": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "users",
+        "color": "#FF5722"
+      }
+    },
+    "K8sService": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "network-wired",
+        "color": "#00BCD4"
+      }
+    },
+    "K8sDeployment": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "rocket",
+        "color": "#2196F3"
+      }
+    },
+    "K8sDaemonSet": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "bezier-curve",
+        "color": "#3F51B5"
+      }
+    },
+    "K8sStatefulSet": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "database",
+        "color": "#009688"
+      }
+    },
+    "K8sIngress": {
+      "icon": {
+        "type": "font-awesome",
+        "name": "door-open",
+        "color": "#E91E63"
+      }
+    }
+  }
+}

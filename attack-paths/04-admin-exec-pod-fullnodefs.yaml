@@ -1,0 +1,87 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: 04-admin-exec-pod-fullnodefs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: Podsexec
+rules:
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  creationTimestamp: null
+  name: 04verify
+  namespace: 04-admin-exec-pod-fullnodefs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  creationTimestamp: null
+  name: rb-04
+  namespace: 04-admin-exec-pod-fullnodefs
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: Podsexec
+subjects:
+- kind: ServiceAccount
+  name: 04verify
+  namespace: 04-admin-exec-pod-fullnodefs
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nodelog-reader
+  namespace: 04-admin-exec-pod-fullnodefs
+spec:
+  restartPolicy: Never
+  containers:
+  - name: admin
+    image: alpine:latest
+    command: ["sleep", "infinity"]
+    volumeMounts:
+    - name: varlog
+      mountPath: /var/log
+  volumes:
+  - name: varlog
+    hostPath:
+      path: /var/log
+      type: ""
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: View
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - nodes
+  verbs:
+  - get
+  - watch
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  creationTimestamp: null
+  name: ClusterWideView
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: View
+subjects:
+- kind: ServiceAccount
+  name: 04verify
+  namespace: 04-admin-exec-pod-fullnodefs

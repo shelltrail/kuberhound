@@ -1,0 +1,543 @@
+{
+  "queries": [
+    {
+      "name": "KuberHound: All Pods using ServiceAccounts",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[:USES_SERVICEACCOUNT]->(sa:K8sServiceAccount) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Identities bound to Roles",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(i)-[:BOUND_TO]->(r) WHERE i:K8sServiceAccount OR i:K8sUser OR i:K8sGroup RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Pods using Secrets",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[:USES_SECRET]->(secret:K8sSecret) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Pods using ConfigMaps",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[:USES_CONFIGMAP]->(cm:K8sConfigMap) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Missing Secrets referenced by Pods",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[r:USES_SECRET]->(secret:K8sSecret) WHERE secret.missing = true AND NOT coalesce(r.optional, false) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Missing ConfigMaps referenced by Pods",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[r:USES_CONFIGMAP]->(cm:K8sConfigMap) WHERE cm.missing = true AND NOT coalesce(r.optional, false) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Can plant a missing ConfigMap referenced by a Pod",
+      "category": "KuberHound - Attack Chains",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(identity)-[:BOUND_TO]->(r)-[:CAN_CREATE_CONFIGMAPS]->(cm:K8sConfigMap)<-[:USES_CONFIGMAP]-(pod:K8sPod) WHERE cm.missing = true RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Can plant a missing Secret referenced by a Pod",
+      "category": "KuberHound - Attack Chains",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(identity)-[:BOUND_TO]->(r)-[:CAN_CREATE_SECRETS]->(s:K8sSecret)<-[:USES_SECRET]-(pod:K8sPod) WHERE s.missing = true RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: ServiceAccounts with dangerous Role/ClusterRole permissions",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(sa:K8sServiceAccount)-[:BOUND_TO]->(r) WHERE size(r.dangerous_permissions) > 0 RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Attack path from Pod to dangerous permissions",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[:USES_SERVICEACCOUNT]->(sa:K8sServiceAccount)-[:BOUND_TO]->(r) WHERE size(r.dangerous_permissions) > 0 RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Privileged Pods with dangerous RBAC permissions",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[:USES_SERVICEACCOUNT]->(sa:K8sServiceAccount)-[:BOUND_TO]->(r) WHERE pod.privileged = true AND size(r.dangerous_permissions) > 0 RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: ServiceAccounts in kube-system namespace",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH (sa:K8sServiceAccount) WHERE sa.namespace = 'kube-system' RETURN sa",
+          "allowCollapse": false
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Pods with elevated privileges (privileged OR hostNetwork OR hostPID)",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH (p:K8sPod) WHERE p.privileged = true OR p.host_network = true OR p.host_pid = true OR p.host_ipc = true RETURN p",
+          "allowCollapse": false
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Roles and ClusterRoles with wildcard permissions",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH (r) WHERE (r:K8sRole OR r:K8sClusterRole) AND ANY(perm IN r.rules WHERE perm CONTAINS '*') RETURN r",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Shortest path from Pod to Secret",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=shortestPath((pod:K8sPod)-[*..5]->(secret:K8sSecret)) RETURN p LIMIT 10",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Identity Assumption via Mounted SA Token",
+      "category": "KuberHound - Identity",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[:IDENTITY_ASSUME]->(sa:K8sServiceAccount) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Pods that can assume dangerous ServiceAccount identities",
+      "category": "KuberHound - Identity",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[:IDENTITY_ASSUME]->(sa:K8sServiceAccount)-[:BOUND_TO]->(r) WHERE size(r.dangerous_permissions) > 0 RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Nodes hosting Pods",
+      "category": "KuberHound - Infrastructure",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(n:K8sNode)-[:HOSTS_POD]->(pod:K8sPod) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: All container escape paths to Node",
+      "category": "KuberHound - Container Escape",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[r]->(n:K8sNode) WHERE type(r) IN ['CE_PRIV_MOUNT', 'CE_NSENTER', 'CE_SYS_PTRACE', 'CE_MODULE_LOAD', 'EXPLOIT_HOST_WRITE', 'EXPLOIT_HOST_READ'] RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: ServiceAccounts with POD_EXEC capability",
+      "category": "KuberHound - RBAC Attacks",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(sa:K8sServiceAccount)-[:BOUND_TO]->(r) WHERE 'POD_EXEC' IN r.attack_capabilities RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: ServiceAccounts with POD_CREATE or WORKLOAD_CREATE capability",
+      "category": "KuberHound - RBAC Attacks",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(sa:K8sServiceAccount)-[:BOUND_TO]->(r) WHERE 'POD_CREATE' IN r.attack_capabilities OR 'WORKLOAD_CREATE' IN r.attack_capabilities RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: ServiceAccounts with TOKEN_LIST capability",
+      "category": "KuberHound - RBAC Attacks",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(sa:K8sServiceAccount)-[:BOUND_TO]->(r) WHERE 'TOKEN_LIST' IN r.attack_capabilities RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: ServiceAccounts with IDENTITY_IMPERSONATE capability",
+      "category": "KuberHound - RBAC Attacks",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(sa:K8sServiceAccount)-[:BOUND_TO]->(r) WHERE 'IDENTITY_IMPERSONATE' IN r.attack_capabilities RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: ServiceAccounts with TOKEN_CREATE capability",
+      "category": "KuberHound - RBAC Attacks",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(sa:K8sServiceAccount)-[:BOUND_TO]->(r) WHERE 'TOKEN_CREATE' IN r.attack_capabilities RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: ServiceAccounts with ROLE_BIND capability",
+      "category": "KuberHound - RBAC Attacks",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(sa:K8sServiceAccount)-[:BOUND_TO]->(r) WHERE 'ROLE_BIND' IN r.attack_capabilities RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Pods with dangerous capabilities",
+      "category": "KuberHound - Pod Security",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH (p:K8sPod) WHERE size(p.dangerous_capabilities) > 0 RETURN p",
+          "allowCollapse": false
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Pods with dangerous hostPath mounts",
+      "category": "KuberHound - Pod Security",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH (p:K8sPod) WHERE size(p.dangerous_host_paths) > 0 RETURN p",
+          "allowCollapse": false
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: From Owned to Anything",
+      "category": "KuberHound - Owned",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(owned)-[*1..5]->(target) WHERE (owned:Tag_Owned) AND owned <> target RETURN p LIMIT 100",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: From Owned to High Value",
+      "category": "KuberHound - Owned",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(owned)-[*1..5]->(target) WHERE (owned:Tag_Owned) AND (target:Tag_Tier_Zero) AND owned <> target RETURN p LIMIT 100",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Cluster Overview - Namespaces and Workloads",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(resource)-[:IN_NAMESPACE]->(ns:K8sNamespace) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Cluster Overview - Namespaces and All Resources",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH (ns:K8sNamespace) OPTIONAL MATCH p1=(r1)-[:IN_NAMESPACE]->(ns) OPTIONAL MATCH (r2:K8sSecret) WHERE r2.namespace = ns.name OPTIONAL MATCH (r3:K8sConfigMap) WHERE r3.namespace = ns.name OPTIONAL MATCH (r4:K8sServiceAccount) WHERE r4.namespace = ns.name OPTIONAL MATCH (r5:K8sRole) WHERE r5.namespace = ns.name RETURN ns, p1, r2, r3, r4, r5",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Roles and ClusterRoles with access to Secrets",
+      "category": "KuberHound - RBAC Attacks",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(r)-[:CAN_LIST_SECRETS|CAN_GET_SECRETS]->(secret:K8sSecret) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Complete TOKEN_LIST attack path to Secrets",
+      "category": "KuberHound - Attack Chains",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[:IDENTITY_ASSUME]->(sa:K8sServiceAccount)-[:BOUND_TO]->(r)-[:CAN_LIST_SECRETS|CAN_WATCH_SECRETS]->(secret:K8sSecret) WHERE 'TOKEN_LIST' IN r.attack_capabilities RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Complete list/watch attack path to ConfigMaps",
+      "category": "KuberHound - Attack Chains",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(pod:K8sPod)-[:IDENTITY_ASSUME]->(sa:K8sServiceAccount)-[:BOUND_TO]->(r)-[:CAN_LIST_CONFIGMAPS|CAN_WATCH_CONFIGMAPS]->(cm:K8sConfigMap) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: All Users in cluster",
+      "category": "KuberHound - Identity",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH (u:K8sUser) RETURN u",
+          "allowCollapse": false
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: All Groups in cluster",
+      "category": "KuberHound - Identity",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH (g:K8sGroup) RETURN g",
+          "allowCollapse": false
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Users with dangerous permissions",
+      "category": "KuberHound - Identity",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(u:K8sUser)-[:BOUND_TO]->(r) WHERE size(r.dangerous_permissions) > 0 RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: POD_CREATE escalation to Node via weak PSA",
+      "category": "KuberHound - Attack Chains",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(identity)-[:BOUND_TO]->(r)-[:CAN_ESCALATE_VIA_POD]->(ns:K8sNamespace) WHERE NOT toLower(r.name) STARTS WITH 'system:' RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: ArgoCD RCE via Secret manipulation",
+      "category": "KuberHound - Attack Chains",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(identity)-[:BOUND_TO]->(r)-[:CAN_ESCALATE_VIA_ARGOCD_SECRET]->(ns:K8sNamespace) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Fluentd RCE via ConfigMap manipulation",
+      "category": "KuberHound - Attack Chains",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(identity)-[:BOUND_TO]->(r)-[:CAN_ESCALATE_VIA_FLUENTD_CONFIG]->(ns:K8sNamespace) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Kubelet exec via nodes/proxy",
+      "category": "KuberHound - Attack Chains",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(identity)-[:BOUND_TO]->(r)-[:CAN_EXEC_VIA_NODE_PROXY]->(n:K8sNode) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Exec, attach and debug access to Pods",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(i)-[:BOUND_TO]->(r)-[:CAN_EXEC_PODS|CAN_ATTACH_PODS|CAN_DEBUG_PODS]->(pod:K8sPod) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Token minting and impersonation of other identities",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(i)-[:BOUND_TO]->(r)-[:CAN_CREATE_TOKEN|CAN_PLANT_TOKEN_SECRET|CAN_IMPERSONATE]->(t) WHERE i <> t AND NOT '*:*:*' IN r.rules AND NOT toLower(r.name) STARTS WITH 'system:' AND NOT toLower(i.name) STARTS WITH 'system:' RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Running a Pod as another ServiceAccount",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(i)-[:BOUND_TO]->(r)-[:CAN_RUN_POD_AS]->(sa:K8sServiceAccount) WHERE i <> sa AND NOT toLower(r.name) STARTS WITH 'system:' RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Binding or escalating Roles",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(i)-[:BOUND_TO]->(r)-[:CAN_BIND|CAN_ESCALATE]->(target) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: Readable ServiceAccount token Secrets",
+      "category": "KuberHound",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(r)-[:CAN_GET_SECRETS|CAN_LIST_SECRETS]->(s:K8sSecret)-[:CONTAINS_TOKEN]->(sa:K8sServiceAccount) RETURN p",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: [EDIT] Explore Entity - Replace 'FLUENTD' with target name",
+      "category": "KuberHound - Exploration",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH (n) WHERE n.name = toUpper('FLUENTD') WITH n MATCH p=(n)-[r*0..2]-(m) RETURN p LIMIT 500",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: [EDIT] Paths from Pod - Replace 'watch-pod' with pod name",
+      "category": "KuberHound - Exploration",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=(src:K8sPod)-[*1..5]->(target) WHERE src.name = toUpper('watch-pod') AND src <> target RETURN p LIMIT 100",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: [EDIT] Shortest paths to target - Replace '02-psa-free' with target name",
+      "category": "KuberHound - Exploration",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=allShortestPaths((src)-[*1..7]->(dst)) WHERE dst.name = toUpper('02-psa-free') AND src <> dst AND NONE(r IN relationships(p) WHERE r.edge_category = 'permission_informational' OR type(r) IN ['IN_NAMESPACE', 'USES_SERVICEACCOUNT', 'EXPOSES', 'ROUTES_TO']) AND NONE(n IN nodes(p) WHERE toLower(n.name) STARTS WITH 'system:') RETURN p ORDER BY length(p) LIMIT 300",
+          "allowCollapse": true
+        }
+      ]
+    }
+  ]
+}

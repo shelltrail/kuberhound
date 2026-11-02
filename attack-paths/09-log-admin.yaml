@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: 09-fluentd-log-admin
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-config
+  namespace: 09-fluentd-log-admin
+data:
+  fluent.conf: |
+    <system>
+      log_level info
+    </system>
+
+    <source>
+      @type tail
+      path /var/log/pods/*/*/*.log
+      exclude_path ["/var/log/pods/*/fluentd-fluentd-elasticsearch/*.log"]
+      pos_file /tmp/fluentd-docker.pos
+      tag kubernetes.*
+      read_from_head true
+      <parse>
+        @type json
+      </parse>
+    </source>
+
+    @include /fluentd/etc/config.d/*.conf
+
+    <match kubernetes.**>
+      @type stdout
+    </match>
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-extra-config
+  namespace: 09-fluentd-log-admin
+data:
+  01-custom.conf: |
+    # Extra fluentd config, @included by fluent.conf. Managed by log-admin.
+  02-custom.conf: |
+    # Reserved for future logging pipeline customization.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fluentd-fluentd-elasticsearch
+  namespace: 09-fluentd-log-admin
+  labels:
+    app.kubernetes.io/instance: fluentd
+    app.kubernetes.io/name: fluentd-elasticsearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: fluentd
+      app.kubernetes.io/name: fluentd-elasticsearch
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: fluentd
+        app.kubernetes.io/name: fluentd-elasticsearch
+    spec:
+      containers:
+        - name: fluentd-fluentd-elasticsearch
+          image: fluent/fluentd:v1.16-1
+          securityContext:
+            privileged: false
+            runAsUser: 0
+          volumeMounts:
+            - name: varlogpods
+              mountPath: /var/log/pods
+            - name: kubelet-pki
+              mountPath: /var/lib/kubelet/pki
+              readOnly: true
+            - name: fluentd-config
+              mountPath: /fluentd/etc/fluent.conf
+              subPath: fluent.conf
+            - name: fluentd-extra-config
+              mountPath: /fluentd/etc/config.d
+      volumes:
+        - name: varlogpods
+          hostPath:
+            path: /var/log/pods
+        - name: kubelet-pki
+          hostPath:
+            path: /var/lib/kubelet/pki
+        - name: fluentd-config
+          configMap:
+            name: fluentd-config
+        - name: fluentd-extra-config
+          configMap:
+            name: fluentd-extra-config
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fluentd-config-editor
+  namespace: 09-fluentd-log-admin
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - update
+  - patch
+  resourceNames:
+  - fluentd-extra-config
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rb-fluentd-config-editor
+  namespace: 09-fluentd-log-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fluentd-config-editor
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: log-admin

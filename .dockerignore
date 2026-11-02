@@ -1,0 +1,8 @@
+.git
+**/__pycache__
+attack-paths
+deploy
+*.json
+!CustomNodes.json
+!kuberhound_queries.json
+*.png

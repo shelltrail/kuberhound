@@ -1,0 +1,276 @@
+# KuberHound + BloodHound CE in one namespace. The KuberHound CronJob scans the cluster daily and
+# uploads the result to the BloodHound instance next to it. See "Running in the cluster" in the README.
+#
+# WARNING: BloodHound's database is a map of how to compromise this cluster, and the kuberhound
+# ServiceAccount can read every Secret in it. Treat this namespace as the most sensitive one in the
+# cluster: nobody else should be able to create pods, exec into pods or create tokens here, and
+# BloodHound must not be exposed through a Service of type LoadBalancer/NodePort or an Ingress.
+#
+# Persistence is optional. By default the databases use emptyDir and lose their data when their pod
+# restarts. To keep it, apply deploy/persistence.yaml and, in the app-db and graph-db Deployments,
+# replace "emptyDir: {}" with the commented persistentVolumeClaim line.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kuberhound
+  labels:
+    # The database images start as root, so "restricted" can't be enforced; warn about it instead
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted
+---
+# Only pods in this namespace can reach BloodHound and the databases (kubectl port-forward still works)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: same-namespace-only
+  namespace: kuberhound
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+  ingress:
+  - from:
+    - podSelector: {}
+---
+# ---------------------------------------------------------------- BloodHound CE
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-db
+  namespace: kuberhound
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: app-db}
+  template:
+    metadata:
+      labels: {app: app-db}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: postgres
+        image: docker.io/library/postgres:18
+        env:
+        - {name: POSTGRES_USER, value: bloodhound}
+        - {name: PGUSER, value: bloodhound}
+        - {name: POSTGRES_DB, value: bloodhound}
+        - name: POSTGRES_PASSWORD
+          valueFrom: {secretKeyRef: {name: bloodhound-db, key: postgres-password}}
+        ports:
+        - containerPort: 5432
+        resources:
+          requests: {memory: 256Mi}
+        readinessProbe:
+          exec:
+            command: ["pg_isready", "-h", "127.0.0.1", "-p", "5432"]
+          timeoutSeconds: 5          # the 1s default flaps on busy nodes, cutting BloodHound off
+        volumeMounts:
+        - {name: data, mountPath: /var/lib/postgresql}
+      volumes:
+      - name: data
+        emptyDir: {}                                    # data is lost when the pod restarts
+        # persistentVolumeClaim: {claimName: app-db}    # persistence: use instead of emptyDir (see header)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-db
+  namespace: kuberhound
+spec:
+  selector: {app: app-db}
+  ports:
+  - port: 5432
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graph-db
+  namespace: kuberhound
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: graph-db}
+  template:
+    metadata:
+      labels: {app: graph-db}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: neo4j
+        image: docker.io/library/neo4j:4.4.42
+        env:
+        - name: NEO4J_PASSWORD
+          valueFrom: {secretKeyRef: {name: bloodhound-db, key: neo4j-password}}
+        - {name: NEO4J_AUTH, value: "neo4j/$(NEO4J_PASSWORD)"}
+        - {name: NEO4J_dbms_allow__upgrade, value: "true"}
+        # Without these, Neo4j sizes its heap and page cache from the node's total memory
+        - {name: NEO4J_dbms_memory_heap_initial__size, value: 512m}
+        - {name: NEO4J_dbms_memory_heap_max__size, value: 1G}
+        - {name: NEO4J_dbms_memory_pagecache_size, value: 512m}
+        ports:
+        - containerPort: 7687
+        resources:
+          requests: {memory: 1536Mi}
+        readinessProbe:
+          tcpSocket: {port: 7687}
+        volumeMounts:
+        - {name: data, mountPath: /data}
+      volumes:
+      - name: data
+        emptyDir: {}                                    # data is lost when the pod restarts
+        # persistentVolumeClaim: {claimName: graph-db}  # persistence: use instead of emptyDir (see header)
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: graph-db
+  namespace: kuberhound
+spec:
+  selector: {app: graph-db}
+  ports:
+  - port: 7687
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bloodhound
+  namespace: kuberhound
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: bloodhound}
+  template:
+    metadata:
+      labels: {app: bloodhound}
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: bloodhound
+        image: docker.io/specterops/bloodhound:latest   # pin to a version tag for repeatable deployments
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom: {secretKeyRef: {name: bloodhound-db, key: postgres-password}}
+        - name: NEO4J_PASSWORD
+          valueFrom: {secretKeyRef: {name: bloodhound-db, key: neo4j-password}}
+        - {name: bhe_database_connection, value: "user=bloodhound password=$(POSTGRES_PASSWORD) dbname=bloodhound host=app-db"}
+        - {name: bhe_neo4j_connection, value: "neo4j://neo4j:$(NEO4J_PASSWORD)@graph-db:7687/"}
+        - {name: bhe_graph_driver, value: neo4j}
+        - {name: bhe_disable_cypher_complexity_limit, value: "false"}
+        - {name: bhe_enable_cypher_mutations, value: "false"}
+        - {name: bhe_graph_query_memory_limit, value: "2"}
+        - {name: bhe_recreate_default_admin, value: "false"}
+        # Admin login comes from the same Secret the scanner uses, instead of a random initial password.
+        # Only applied when BloodHound creates its admin, i.e. on an empty app-db.
+        - name: bhe_default_admin_principal_name
+          valueFrom: {secretKeyRef: {name: kuberhound-bloodhound, key: username}}
+        - name: bhe_default_admin_password
+          valueFrom: {secretKeyRef: {name: kuberhound-bloodhound, key: password}}
+        - {name: bhe_default_admin_expire_now, value: "false"}   # no forced reset, so the scanner can log in
+        ports:
+        - containerPort: 8080
+        resources:
+          requests: {memory: 1Gi}    # graph analysis after each upload needs headroom
+        readinessProbe:
+          tcpSocket: {port: 8080}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bloodhound
+  namespace: kuberhound
+spec:
+  type: ClusterIP   # access with kubectl port-forward; never expose it outside the cluster
+  selector: {app: bloodhound}
+  ports:
+  - port: 8080
+---
+# ---------------------------------------------------------------- KuberHound scanner
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kuberhound
+  namespace: kuberhound
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kuberhound-reader
+rules:
+- apiGroups: [""]
+  resources: ["namespaces", "nodes", "pods", "secrets", "configmaps", "serviceaccounts", "services"]
+  verbs: ["list"]
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["roles", "clusterroles", "rolebindings", "clusterrolebindings"]
+  verbs: ["list"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "daemonsets", "statefulsets"]
+  verbs: ["list"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kuberhound-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kuberhound-reader
+subjects:
+- kind: ServiceAccount
+  name: kuberhound
+  namespace: kuberhound
+---
+# Each run clears the previous graph (keeping saved queries and Owned markers) so deleted resources
+# and revoked permissions don't linger, then collects and uploads a fresh one.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kuberhound
+  namespace: kuberhound
+spec:
+  schedule: "0 2 * * *"            # daily at 02:00
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 3600
+      template:
+        spec:
+          serviceAccountName: kuberhound
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile: {type: RuntimeDefault}
+          initContainers:
+          # Clear the previous graph; returns once BloodHound has finished deleting it
+          - name: clear-bloodhound
+            image: kuberhound:local        # imported into containerd on the nodes (see README)
+            imagePullPolicy: Never
+            args: ["--clear-database", "--skip-clear-queries", "--skip-clear-owned"]
+            env: &bloodhound-env
+            - {name: BLOODHOUND_URL, value: "http://bloodhound:8080"}
+            - name: BLOODHOUND_USERNAME
+              valueFrom: {secretKeyRef: {name: kuberhound-bloodhound, key: username}}
+            - name: BLOODHOUND_PASSWORD
+              valueFrom: {secretKeyRef: {name: kuberhound-bloodhound, key: password}}
+            securityContext: &hardened
+              allowPrivilegeEscalation: false
+              readOnlyRootFilesystem: true
+              capabilities: {drop: ["ALL"]}
+          containers:
+          - name: collector
+            image: kuberhound:local        # imported into containerd on the nodes (see README)
+            imagePullPolicy: Never
+            args: ["--upload-queries"]
+            env: *bloodhound-env
+            securityContext: *hardened
+            resources:
+              requests: {memory: 256Mi}
+              limits: {memory: 1Gi}        # the whole graph is held in memory; raise for large clusters

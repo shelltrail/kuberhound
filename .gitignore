@@ -1,0 +1,4 @@
+*__pycache__*
+# Collector output: a map of how to compromise the scanned cluster
+/kuberhound.json
+*.tar

@@ -1,0 +1,24 @@
+# Optional: persistent storage for BloodHound's databases (uses the cluster's default StorageClass).
+# Apply together with kuberhound.yaml, and switch the app-db and graph-db Deployments from emptyDir
+# to these claims (see the comment on their "volumes:").
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-db
+  namespace: kuberhound
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: graph-db
+  namespace: kuberhound
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 10Gi

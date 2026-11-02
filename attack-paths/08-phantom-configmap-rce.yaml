@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: 08-phantom-configmap-rce-USERID
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: webserver
+  namespace: 08-phantom-configmap-rce-USERID
+  labels:
+    app: webserver
+spec:
+  containers:
+    - name: webserver
+      image: php:apache
+      ports:
+        - containerPort: 80
+      volumeMounts:
+        - name: app-config-vol
+          mountPath: /var/www/html
+  volumes:
+    - name: app-config-vol
+      configMap:
+        name: app-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webserver-svc
+  namespace: 08-phantom-configmap-rce-USERID
+spec:
+  selector:
+    app: webserver
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sa-config-writer
+  namespace: 08-phantom-configmap-rce-USERID
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: config-writer
+  namespace: 08-phantom-configmap-rce-USERID
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rb-config-writer
+  namespace: 08-phantom-configmap-rce-USERID
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: config-writer
+subjects:
+- kind: ServiceAccount
+  name: sa-config-writer
+  namespace: 08-phantom-configmap-rce-USERID
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: attacker-pod
+  namespace: 08-phantom-configmap-rce-USERID
+spec:
+  serviceAccountName: sa-config-writer
+  automountServiceAccountToken: true
+  containers:
+    - name: attacker-container
+      image: alpine:latest
+      command: ["sleep", "infinity"]

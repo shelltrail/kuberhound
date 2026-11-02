@@ -1,0 +1,53 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  name: 02-psa-free
+spec: {}
+status: {}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-creator
+  namespace: 02-psa-free
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - create
+  - get
+  - list
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rb-defaultsa-createpod
+  namespace: 02-psa-free
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pod-creator
+subjects:
+- kind: ServiceAccount
+  name: default
+  namespace: 02-psa-free
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: landing-pod
+  namespace: 02-psa-free
+spec:
+  serviceAccountName: default
+  automountServiceAccountToken: true
+  containers:
+    - name: landing-container
+      image: alpine:latest
+      command: ["sleep", "infinity"]

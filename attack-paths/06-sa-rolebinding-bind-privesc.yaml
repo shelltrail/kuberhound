@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: 06-rolebinding-escalation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: victim-admin-role
+  namespace: 06-rolebinding-escalation
+rules:
+- apiGroups: ["*"]
+  resources: ["*"]
+  verbs: ["*"]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sa-binder
+  namespace: 06-rolebinding-escalation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: role-binder
+  namespace: 06-rolebinding-escalation
+rules:
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - bind
+  resourceNames:
+  - victim-admin-role
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rb-role-binder
+  namespace: 06-rolebinding-escalation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: role-binder
+subjects:
+- kind: ServiceAccount
+  name: sa-binder
+  namespace: 06-rolebinding-escalation
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: attacker-pod
+  namespace: 06-rolebinding-escalation
+spec:
+  serviceAccountName: sa-binder
+  automountServiceAccountToken: true
+  containers:
+    - name: attacker-container
+      image: alpine:latest
+      command: ["sleep", "infinity"]

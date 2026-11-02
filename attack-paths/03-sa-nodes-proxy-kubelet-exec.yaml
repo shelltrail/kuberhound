@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+  name: 03-nodes-proxy-exec
+---
+# Monitoring-style identity: read-only on nodes and nodes/proxy (common for metrics scrapers)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metrics-scraper
+  namespace: 03-nodes-proxy-exec
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: 03-node-metrics-reader
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - nodes/proxy
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: 03-node-metrics-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: 03-node-metrics-reader
+subjects:
+- kind: ServiceAccount
+  name: metrics-scraper
+  namespace: 03-nodes-proxy-exec
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: metrics-scraper
+  namespace: 03-nodes-proxy-exec
+spec:
+  serviceAccountName: metrics-scraper
+  automountServiceAccountToken: true
+  containers:
+    - name: scraper
+      image: alpine:latest
+      command: ["sleep", "infinity"]
+---
+# Target: a privileged node agent, the kind of pod (CNI, log shipper, security agent) found on most nodes
+apiVersion: v1
+kind: Pod
+metadata:
+  name: node-agent
+  namespace: 03-nodes-proxy-exec
+spec:
+  hostPID: true
+  automountServiceAccountToken: false
+  containers:
+    - name: agent
+      image: alpine:latest
+      command: ["sleep", "infinity"]
+      securityContext:
+        privileged: true
