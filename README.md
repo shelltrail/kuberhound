@@ -136,7 +136,6 @@ The collector reads its BloodHound login from the `BLOODHOUND_URL`, `BLOODHOUND_
 | 01 | `list`/`watch` on secrets reveals their full contents, no `get` needed |
 | 02 | Pod creation in a namespace without Pod Security enforcement leads to node takeover |
 | 03 | `get` on `nodes/proxy` allows exec into any pod through the kubelet API |
-| 04 | A `/var/log` host mount plus symlinks leaks node files through `kubectl logs` |
 | 05 | Write access to secrets in the ArgoCD namespace gives code execution in the ArgoCD controller |
 | 06 | The `bind` verb lets a subject bind itself to a more privileged role |
 | 07 | `create` on `serviceaccounts/token` mints tokens for another service account |

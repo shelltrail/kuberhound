@@ -55,3 +55,32 @@ Non-expiring tokens for every ServiceAccount in scope (cluster-wide with a Clust
 
 ### Advisories
 Not a CVE, documented behavior: https://kubernetes.io/docs/concepts/configuration/secret/#serviceaccount-token-secrets
+
+### Mitigation
+
+Block the Secret type at admission:
+
+```
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: deny-sa-token-secrets
+spec:
+  matchConstraints:
+    resourceRules:
+    - apiGroups: [""]
+      apiVersions: ["v1"]
+      operations: ["CREATE"]
+      resources: ["secrets"]
+  validations:
+  - expression: "object.type != 'kubernetes.io/service-account-token'"
+    message: "Creating service-account-token Secrets is not allowed"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: deny-sa-token-secrets
+spec:
+  policyName: deny-sa-token-secrets
+  validationActions: [Deny]
+```

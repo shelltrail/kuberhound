@@ -518,12 +518,12 @@
       ]
     },
     {
-      "name": "KuberHound: [EDIT] Paths from Pod - Replace 'watch-pod' with pod name",
+      "name": "KuberHound: [EDIT] Paths from Entity - Replace 'watch-pod' with entity name",
       "category": "KuberHound - Exploration",
       "queryList": [
         {
           "final": true,
-          "query": "MATCH p=(src:K8sPod)-[*1..5]->(target) WHERE src.name = toUpper('watch-pod') AND src <> target RETURN p LIMIT 100",
+          "query": "MATCH p=(src)-[*1..5]->(target) WHERE src.name = toUpper('watch-pod') AND src <> target AND ALL(r IN relationships(p) WHERE r.edge_category IN ['attack', 'permission', 'permission_critical']) RETURN p ORDER BY length(p) LIMIT 200",
           "allowCollapse": true
         }
       ]
