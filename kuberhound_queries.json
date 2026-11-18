@@ -518,12 +518,23 @@
       ]
     },
     {
-      "name": "KuberHound: [EDIT] Paths from Entity - Replace 'watch-pod' with entity name",
+      "name": "KuberHound: [EDIT] Shortest attack paths from Entity - Replace 'watch-pod' with entity name",
       "category": "KuberHound - Exploration",
       "queryList": [
         {
           "final": true,
-          "query": "MATCH p=(src)-[*1..5]->(target) WHERE src.name = toUpper('watch-pod') AND src <> target AND ALL(r IN relationships(p) WHERE r.edge_category IN ['attack', 'permission', 'permission_critical']) RETURN p ORDER BY length(p) LIMIT 200",
+          "query": "MATCH p=shortestPath((src)-[*1..7]->(target)) WHERE src.name = toUpper('watch-pod') AND src <> target AND ALL(r IN relationships(p) WHERE r.edge_category IN ['attack', 'permission', 'permission_critical']) RETURN p ORDER BY length(p)",
+          "allowCollapse": true
+        }
+      ]
+    },
+    {
+      "name": "KuberHound: [EDIT] Shortest attack paths to high-value targets - Replace 'watch-pod'",
+      "category": "KuberHound - Exploration",
+      "queryList": [
+        {
+          "final": true,
+          "query": "MATCH p=shortestPath((src)-[*1..7]->(target)) WHERE src.name = toUpper('watch-pod') AND src <> target AND (target:K8sSecret OR target:K8sNode OR target:K8sNamespace) AND ALL(r IN relationships(p) WHERE r.edge_category IN ['attack', 'permission', 'permission_critical']) RETURN p ORDER BY length(p)",
           "allowCollapse": true
         }
       ]
